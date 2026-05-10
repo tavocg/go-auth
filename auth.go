@@ -6,10 +6,10 @@ import "context"
 // Credentials contains the access and refresh credentials returned by an
 // Authenticator.
 type Credentials struct {
-	AccessToken           string `json:"access_token"`
-	ExpiresIn             int64  `json:"expires_in"`
-	RefreshToken          string `json:"refresh_token"`
-	RefreshTokenExpiresIn int64  `json:"refresh_token_expires_in"`
+	AccessToken           string
+	ExpiresIn             int64
+	RefreshToken          string
+	RefreshTokenExpiresIn int64
 }
 
 // Identifier exposes the stable subject identifier used in credentials.
