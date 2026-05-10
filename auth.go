@@ -29,7 +29,7 @@ type Authenticator[T Identifier] interface {
 	// Issue creates a new token pair for the provided identity.
 	Issue(ctx context.Context, identity T) (tokens *Tokens, err error)
 	// Refresh exchanges a token pair for a new token pair.
-	Refresh(ctx context.Context, accessToken, refreshToken string) (tokens *Tokens, err error)
+	Refresh(ctx context.Context, refreshToken string) (tokens *Tokens, err error)
 	// Verify validates an access token and returns its identity.
 	Verify(ctx context.Context, accessToken string) (identity T, err error)
 	// Revoke invalidates a single refresh token.
