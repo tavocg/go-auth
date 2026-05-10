@@ -1,18 +1,24 @@
 // Package auth defines small authentication interfaces and credential types.
 package auth
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
-// Credentials contains the access and refresh credentials returned by an
-// Authenticator.
-type Credentials struct {
-	AccessToken           string
-	ExpiresIn             int64
-	RefreshToken          string
-	RefreshTokenExpiresIn int64
+// Token contains a token value and its expiration time.
+type Token struct {
+	Value     string
+	ExpiresAt time.Time
 }
 
-// Identifier exposes the stable subject identifier used in credentials.
+// Tokens contains the access and refresh tokens returned by an Authenticator.
+type Tokens struct {
+	Access  Token
+	Refresh Token
+}
+
+// Identifier exposes the stable subject identifier used in tokens.
 type Identifier interface {
 	Subject() string
 }
@@ -20,10 +26,10 @@ type Identifier interface {
 // Authenticator issues, verifies, refreshes, and revokes credentials for an
 // identity type.
 type Authenticator[T Identifier] interface {
-	// Issue creates a new credential pair for the provided identity.
-	Issue(ctx context.Context, identity T) (creds *Credentials, err error)
-	// Refresh exchanges a refresh token for a new credential pair.
-	Refresh(ctx context.Context, accessToken, refreshToken string) (creds *Credentials, err error)
+	// Issue creates a new token pair for the provided identity.
+	Issue(ctx context.Context, identity T) (tokens *Tokens, err error)
+	// Refresh exchanges a token pair for a new token pair.
+	Refresh(ctx context.Context, accessToken, refreshToken string) (tokens *Tokens, err error)
 	// Verify validates an access token and returns its identity.
 	Verify(ctx context.Context, accessToken string) (identity T, err error)
 	// Revoke invalidates a single refresh token.
