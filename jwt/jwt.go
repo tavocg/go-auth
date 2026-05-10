@@ -3,25 +3,34 @@ package jwt
 
 import "time"
 
-// Claims stores the payload claims encoded into a JWT.
-type Claims map[string]any
-
-// SignFunc signs claims with the provided secret.
-type SignFunc func(claims Claims, secret []byte) (string, error)
-
-// VerifyFunc verifies a token with the provided secret.
-type VerifyFunc func(token string, secret []byte) (Claims, error)
-
-// Tokener signs and verifies JWTs using a shared secret and TTL policy.
-type Tokener struct {
-	secret []byte
-	ttl    time.Duration
-	sign   SignFunc
-	verify VerifyFunc
+// Expirer exposes expiration claim accessors.
+type Expirer interface {
+	ExpiresAt() int64
+	SetExpiresAt(int64)
 }
 
-// NewTokener creates a Tokener with the provided secret, TTL policy, and algorithms.
-func NewTokener(secret string, ttl time.Duration, sign SignFunc, verify VerifyFunc) (*Tokener, error) {
+// Claimer is implemented by concrete claims types used by token signers and
+// verifiers.
+type Claimer interface {
+	Expirer
+}
+
+// SignFunc signs claims with the provided secret.
+type SignFunc[C Claimer] func(claims C, secret []byte) (string, error)
+
+// VerifyFunc verifies a token with the provided secret.
+type VerifyFunc[C Claimer] func(token string, secret []byte) (C, error)
+
+// tokener signs and verifies JWTs using a shared secret and TTL policy.
+type tokener[C Claimer] struct {
+	secret []byte
+	ttl    time.Duration
+	sign   SignFunc[C]
+	verify VerifyFunc[C]
+}
+
+// NewTokener creates a tokener with the provided secret, TTL policy, and algorithms.
+func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], verify VerifyFunc[C]) (*tokener[C], error) {
 	if secret == "" {
 		return nil, ErrInvalidSecret
 	}
@@ -32,7 +41,7 @@ func NewTokener(secret string, ttl time.Duration, sign SignFunc, verify VerifyFu
 		return nil, ErrInvalidVerifyFunc
 	}
 
-	return &Tokener{
+	return &tokener[C]{
 		secret: []byte(secret),
 		ttl:    ttl,
 		sign:   sign,
@@ -40,38 +49,26 @@ func NewTokener(secret string, ttl time.Duration, sign SignFunc, verify VerifyFu
 	}, nil
 }
 
-// NewHS256Tokener creates a Tokener configured for HS256.
-func NewHS256Tokener(secret string, ttl time.Duration) (*Tokener, error) {
-	return NewTokener(secret, ttl, SignHS256, VerifyHS256)
-}
-
 // Sign signs a claim set.
-func (t *Tokener) Sign(claims Claims) (string, error) {
-	if claims == nil {
-		claims = Claims{}
-	}
-
+func (t *tokener[C]) Sign(claims C) (string, error) {
 	if t.ttl > 0 {
-		claims = cloneClaims(claims)
-		claims[claimExp] = time.Now().UTC().Add(t.ttl).Unix()
+		claims.SetExpiresAt(time.Now().UTC().Add(t.ttl).Unix())
 	}
 
 	return t.sign(claims, t.secret)
 }
 
 // Verify verifies a token and checks expiration when present.
-func (t *Tokener) Verify(token string) (Claims, error) {
+func (t *tokener[C]) Verify(token string) (C, error) {
 	claims, err := t.verify(token, t.secret)
 	if err != nil {
-		return nil, err
+		var zero C
+		return zero, err
 	}
 
-	exp, ok, err := claimInt64(claims, claimExp)
-	if err != nil {
-		return nil, err
-	}
-	if ok && time.Now().UTC().Unix() >= exp {
-		return nil, ErrExpiredToken
+	if claims.ExpiresAt() != 0 && time.Now().UTC().Unix() >= claims.ExpiresAt() {
+		var zero C
+		return zero, ErrExpiredToken
 	}
 
 	return claims, nil

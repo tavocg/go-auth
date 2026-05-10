@@ -6,8 +6,7 @@ import (
 )
 
 const (
-	jwtType  = "JWT"
-	claimExp = "exp"
+	jwtType = "JWT"
 )
 
 type errStr string
@@ -31,15 +30,12 @@ type header struct {
 	Type      string `json:"typ,omitempty"`
 }
 
-func signToken(claims Claims, alg string, secret []byte, sign signer) (string, error) {
+func signToken[C Claimer](claims C, alg string, secret []byte, sign signer) (string, error) {
 	if len(secret) == 0 {
 		return "", ErrInvalidSecret
 	}
 	if sign == nil {
 		return "", ErrInvalidToken
-	}
-	if claims == nil {
-		claims = Claims{}
 	}
 
 	header := header{
@@ -60,7 +56,7 @@ func signToken(claims Claims, alg string, secret []byte, sign signer) (string, e
 	return signingInput + "." + encode(signature), nil
 }
 
-func signingInput(header header, claims Claims) (string, error) {
+func signingInput[C Claimer](header header, claims C) (string, error) {
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
 		return "", err
@@ -80,42 +76,4 @@ func encode(src []byte) string {
 
 func decode(src string) ([]byte, error) {
 	return base64.RawURLEncoding.DecodeString(src)
-}
-
-func cloneClaims(claims Claims) Claims {
-	cloned := make(Claims, len(claims))
-	for key, value := range claims {
-		cloned[key] = value
-	}
-
-	return cloned
-}
-
-// claimInt64 reads an integer claim value when present.
-func claimInt64(claims Claims, key string) (int64, bool, error) {
-	value, ok := claims[key]
-	if !ok {
-		return 0, false, nil
-	}
-
-	switch value := value.(type) {
-	case float64:
-		return int64(value), true, nil
-	case float32:
-		return int64(value), true, nil
-	case int:
-		return int64(value), true, nil
-	case int64:
-		return value, true, nil
-	case int32:
-		return int64(value), true, nil
-	case json.Number:
-		n, err := value.Int64()
-		if err != nil {
-			return 0, false, ErrInvalidToken
-		}
-		return n, true, nil
-	default:
-		return 0, false, ErrInvalidToken
-	}
 }
