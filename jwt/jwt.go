@@ -1,4 +1,4 @@
-// Package jwt provides minimal HS256 JWT signing and verification helpers.
+// Package jwt provides minimal JWT signing and verification helpers.
 package jwt
 
 import "time"
@@ -6,26 +6,47 @@ import "time"
 // Claims stores the payload claims encoded into a JWT.
 type Claims map[string]any
 
-// Tokener signs and verifies HS256 JWTs using a shared secret and TTL policy.
+// SignFunc signs claims with the provided secret.
+type SignFunc func(claims Claims, secret []byte) (string, error)
+
+// VerifyFunc verifies a token with the provided secret.
+type VerifyFunc func(token string, secret []byte) (Claims, error)
+
+// Tokener signs and verifies JWTs using a shared secret and TTL policy.
 type Tokener struct {
 	secret []byte
 	ttl    time.Duration
+	sign   SignFunc
+	verify VerifyFunc
 }
 
-// NewTokener creates a Tokener with the provided secret and TTL policy.
-func NewTokener(secret string, ttl time.Duration) (*Tokener, error) {
+// NewTokener creates a Tokener with the provided secret, TTL policy, and algorithms.
+func NewTokener(secret string, ttl time.Duration, sign SignFunc, verify VerifyFunc) (*Tokener, error) {
 	if secret == "" {
 		return nil, ErrInvalidSecret
+	}
+	if sign == nil {
+		return nil, ErrInvalidSignFunc
+	}
+	if verify == nil {
+		return nil, ErrInvalidVerifyFunc
 	}
 
 	return &Tokener{
 		secret: []byte(secret),
 		ttl:    ttl,
+		sign:   sign,
+		verify: verify,
 	}, nil
 }
 
-// SignHS256 signs a claim set as an HS256 JWT.
-func (t *Tokener) SignHS256(claims Claims) (string, error) {
+// NewHS256Tokener creates a Tokener configured for HS256.
+func NewHS256Tokener(secret string, ttl time.Duration) (*Tokener, error) {
+	return NewTokener(secret, ttl, SignHS256, VerifyHS256)
+}
+
+// Sign signs a claim set.
+func (t *Tokener) Sign(claims Claims) (string, error) {
 	if claims == nil {
 		claims = Claims{}
 	}
@@ -35,12 +56,12 @@ func (t *Tokener) SignHS256(claims Claims) (string, error) {
 		claims[claimExp] = time.Now().UTC().Add(t.ttl).Unix()
 	}
 
-	return signToken(claims, algHS256, t.secret, signHS256)
+	return t.sign(claims, t.secret)
 }
 
-// VerifyHS256 verifies an HS256 JWT and checks expiration when present.
-func (t *Tokener) VerifyHS256(token string) (Claims, error) {
-	claims, err := verifyHS256Token(token, t.secret)
+// Verify verifies a token and checks expiration when present.
+func (t *Tokener) Verify(token string) (Claims, error) {
+	claims, err := t.verify(token, t.secret)
 	if err != nil {
 		return nil, err
 	}
