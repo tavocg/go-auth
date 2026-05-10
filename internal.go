@@ -1,5 +1,7 @@
 package auth
 
+// TODO: remove unused errors, merge if too similar or unnecessary distinction
+
 type errStr string
 
 func (e errStr) Error() string {
