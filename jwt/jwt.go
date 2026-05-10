@@ -21,16 +21,16 @@ type SignFunc[C Claimer] func(claims C, secret []byte) (string, error)
 // VerifyFunc verifies a token with the provided secret.
 type VerifyFunc[C Claimer] func(token string, secret []byte) (C, error)
 
-// tokener signs and verifies JWTs using a shared secret and TTL policy.
-type tokener[C Claimer] struct {
+// Tokener signs and verifies JWTs using a shared secret and TTL policy.
+type Tokener[C Claimer] struct {
 	secret []byte
 	ttl    time.Duration
 	sign   SignFunc[C]
 	verify VerifyFunc[C]
 }
 
-// NewTokener creates a tokener with the provided secret, TTL policy, and algorithms.
-func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], verify VerifyFunc[C]) (*tokener[C], error) {
+// NewTokener creates a Tokener with the provided secret, TTL policy, and algorithms.
+func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], verify VerifyFunc[C]) (*Tokener[C], error) {
 	if secret == "" {
 		return nil, ErrInvalidSecret
 	}
@@ -41,7 +41,7 @@ func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], v
 		return nil, ErrInvalidVerifyFunc
 	}
 
-	return &tokener[C]{
+	return &Tokener[C]{
 		secret: []byte(secret),
 		ttl:    ttl,
 		sign:   sign,
@@ -50,7 +50,7 @@ func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], v
 }
 
 // Sign signs a claim set.
-func (t *tokener[C]) Sign(claims C) (string, error) {
+func (t *Tokener[C]) Sign(claims C) (string, error) {
 	if t.ttl > 0 {
 		claims.SetExpiresAt(time.Now().UTC().Add(t.ttl).Unix())
 	}
@@ -59,7 +59,7 @@ func (t *tokener[C]) Sign(claims C) (string, error) {
 }
 
 // Verify verifies a token and checks expiration when present.
-func (t *tokener[C]) Verify(token string) (C, error) {
+func (t *Tokener[C]) Verify(token string) (C, error) {
 	claims, err := t.verify(token, t.secret)
 	if err != nil {
 		var zero C

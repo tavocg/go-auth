@@ -10,8 +10,8 @@ import (
 
 const algHS256 = "HS256"
 
-// NewHS256Tokener creates a tokener configured for HS256.
-func NewHS256Tokener[C Claimer](secret string, ttl time.Duration) (*tokener[C], error) {
+// NewHS256Tokener creates a Tokener configured for HS256.
+func NewHS256Tokener[C Claimer](secret string, ttl time.Duration) (*Tokener[C], error) {
 	return NewTokener(secret, ttl, SignHS256[C], VerifyHS256[C])
 }
 
