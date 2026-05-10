@@ -2,10 +2,13 @@ package examples
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"sync"
 	"time"
 
-	auth "github.com/tavocg/go-auth"
+	"github.com/tavocg/go-auth"
 	"github.com/tavocg/go-auth/jwt"
 )
 
@@ -13,7 +16,6 @@ import (
 type Claims struct {
 	Expires int64  `json:"expires_at,omitempty"`
 	Sub     string `json:"sub"`
-	Kind    string `json:"kind,omitempty"`
 }
 
 func (c *Claims) ExpiresAt() int64 {
@@ -42,9 +44,9 @@ func (c *Claims) Subject() string {
 
 // Authenticator is a minimal JWT-backed auth.Authenticator example.
 type Authenticator struct {
-	access  *jwt.Tokener[*Claims]
-	refresh *jwt.Tokener[*Claims]
-	store   sync.Map
+	tokener    *jwt.Tokener[*Claims]
+	refreshTTL time.Duration
+	store      sync.Map
 }
 
 // NewAuthenticator creates a minimal JWT-backed authenticator example.
@@ -58,14 +60,9 @@ func NewAuthenticator(secret string, accessTTL, refreshTTL time.Duration) (*Auth
 		return nil, err
 	}
 
-	refresh, err := jwt.NewHS256Tokener[*Claims](secret, refreshTTL)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Authenticator{
-		access:  access,
-		refresh: refresh,
+		tokener:    access,
+		refreshTTL: refreshTTL,
 	}, nil
 }
 
@@ -76,46 +73,96 @@ func (a *Authenticator) Issue(ctx context.Context, identity *Claims) (*auth.Toke
 		return nil, auth.ErrInvalidIdentity
 	}
 
-	return a.issue(identity.Subject())
+	claims := &Claims{Sub: identity.Subject()}
+	accessValue, err := a.tokener.Sign(claims)
+	if err != nil {
+		return nil, err
+	}
+
+	refreshValue, err := randomSecret()
+	if err != nil {
+		return nil, err
+	}
+
+	refreshExpiresAt := time.Time{}
+	if a.refreshTTL > 0 {
+		refreshExpiresAt = time.Now().UTC().Add(a.refreshTTL)
+	}
+
+	accessExpiresAt := time.Time{}
+	if claims.ExpiresAt() != 0 {
+		accessExpiresAt = time.Unix(claims.ExpiresAt(), 0).UTC()
+	}
+
+	a.store.Store(hashSecret(refreshValue), refreshRecord{
+		Subject:   identity.Subject(),
+		ExpiresAt: refreshExpiresAt.Unix(),
+	})
+
+	return &auth.Tokens{
+		Access: auth.Token{
+			Value:     accessValue,
+			ExpiresAt: accessExpiresAt,
+		},
+		Refresh: auth.Token{
+			Value:     refreshValue,
+			ExpiresAt: refreshExpiresAt,
+		},
+	}, nil
 }
 
 func (a *Authenticator) Refresh(ctx context.Context, refreshToken string) (*auth.Tokens, error) {
 	_ = ctx
 
-	claims, err := a.verify(refreshToken, kindRefresh)
-	if err != nil {
-		return nil, err
-	}
-
-	key := refreshKey(claims.Subject())
+	key := hashSecret(refreshToken)
 	value, ok := a.store.Load(key)
 	if !ok {
 		return nil, auth.ErrRevokedToken
 	}
 
-	exp, ok := value.(int64)
-	if !ok || exp != claims.ExpiresAt() {
-		return nil, auth.ErrRevokedToken
+	record, ok := value.(refreshRecord)
+	if !ok {
+		return nil, auth.ErrInvalidToken
+	}
+	if record.ExpiresAt != 0 && time.Now().UTC().Unix() >= record.ExpiresAt {
+		a.store.Delete(key)
+		return nil, auth.ErrExpiredToken
 	}
 
-	return a.issue(claims.Subject())
+	a.store.Delete(key)
+	return a.Issue(ctx, &Claims{Sub: record.Subject})
 }
 
 func (a *Authenticator) Verify(ctx context.Context, accessToken string) (*Claims, error) {
 	_ = ctx
 
-	return a.verify(accessToken, kindAccess)
+	claims, err := a.tokener.Verify(accessToken)
+	if err != nil {
+		switch err {
+		case jwt.ErrInvalidToken:
+			return nil, auth.ErrInvalidToken
+		case jwt.ErrExpiredToken:
+			return nil, auth.ErrExpiredToken
+		default:
+			return nil, err
+		}
+	}
+	if claims == nil || claims.Subject() == "" {
+		return nil, auth.ErrInvalidToken
+	}
+
+	return claims, nil
 }
 
 func (a *Authenticator) Revoke(ctx context.Context, refreshToken string) error {
 	_ = ctx
 
-	claims, err := a.verify(refreshToken, kindRefresh)
-	if err != nil {
-		return err
+	key := hashSecret(refreshToken)
+	if _, ok := a.store.Load(key); !ok {
+		return auth.ErrRevokedToken
 	}
 
-	a.store.Delete(refreshKey(claims.Subject()))
+	a.store.Delete(key)
 	return nil
 }
 
@@ -126,92 +173,35 @@ func (a *Authenticator) RevokeAll(ctx context.Context, identity *Claims) error {
 		return auth.ErrInvalidIdentity
 	}
 
-	a.store.Delete(refreshKey(identity.Subject()))
+	a.store.Range(func(key, value any) bool {
+		record, ok := value.(refreshRecord)
+		if ok && record.Subject == identity.Subject() {
+			a.store.Delete(key)
+		}
+		return true
+	})
+
 	return nil
 }
 
-func (a *Authenticator) issue(subject string) (*auth.Tokens, error) {
-	access, err := a.sign(a.access, subject, kindAccess)
+func randomSecret() (string, error) {
+	buf := make([]byte, 32)
+	_, err := rand.Read(buf)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
-	refresh, err := a.sign(a.refresh, subject, kindRefresh)
-	if err != nil {
-		return nil, err
-	}
-
-	a.store.Store(refreshKey(subject), refresh.ExpiresAt.Unix())
-
-	return &auth.Tokens{
-		Access:  access,
-		Refresh: refresh,
-	}, nil
+	return hex.EncodeToString(buf), nil
 }
 
-func (a *Authenticator) sign(tokener *jwt.Tokener[*Claims], subject, kind string) (auth.Token, error) {
-	claims := &Claims{
-		Sub:  subject,
-		Kind: kind,
-	}
-
-	value, err := tokener.Sign(claims)
-	if err != nil {
-		return auth.Token{}, err
-	}
-
-	return auth.Token{
-		Value:     value,
-		ExpiresAt: unixTime(claims.ExpiresAt()),
-	}, nil
+func hashSecret(secret string) string {
+	sum := sha256.Sum256([]byte(secret))
+	return hex.EncodeToString(sum[:])
 }
 
-func (a *Authenticator) verify(token, kind string) (*Claims, error) {
-	var tokener *jwt.Tokener[*Claims]
-	if kind == kindRefresh {
-		tokener = a.refresh
-	} else {
-		tokener = a.access
-	}
-
-	claims, err := tokener.Verify(token)
-	if err != nil {
-		return nil, mapJWTError(err)
-	}
-
-	if claims == nil || claims.Subject() == "" || claims.Kind != kind {
-		return nil, auth.ErrInvalidToken
-	}
-
-	return claims, nil
+type refreshRecord struct {
+	Subject   string
+	ExpiresAt int64
 }
-
-func mapJWTError(err error) error {
-	switch err {
-	case jwt.ErrInvalidToken:
-		return auth.ErrInvalidToken
-	case jwt.ErrExpiredToken:
-		return auth.ErrExpiredToken
-	default:
-		return err
-	}
-}
-
-func refreshKey(subject string) string {
-	return subject + ":rt"
-}
-
-func unixTime(sec int64) time.Time {
-	if sec == 0 {
-		return time.Time{}
-	}
-
-	return time.Unix(sec, 0).UTC()
-}
-
-const (
-	kindAccess  = "at"
-	kindRefresh = "rt"
-)
 
 var _ auth.Authenticator[*Claims] = (*Authenticator)(nil)
