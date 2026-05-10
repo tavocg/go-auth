@@ -21,26 +21,13 @@ type Identifier interface {
 // identity type.
 type Authenticator[T Identifier] interface {
 	// Issue creates a new credential pair for the provided identity.
-	Issue(ctx context.Context, identity T, opts ...IssueOption) (creds *Credentials, err error)
+	Issue(ctx context.Context, identity T) (creds *Credentials, err error)
 	// Refresh exchanges a refresh token for a new credential pair.
-	Refresh(ctx context.Context, refreshToken string) (creds *Credentials, err error)
+	Refresh(ctx context.Context, accessToken, refreshToken string) (creds *Credentials, err error)
 	// Verify validates an access token and returns its identity.
 	Verify(ctx context.Context, accessToken string) (identity T, err error)
 	// Revoke invalidates a single refresh token.
 	Revoke(ctx context.Context, refreshToken string) (err error)
 	// RevokeAll invalidates every refresh token associated with an identity.
 	RevokeAll(ctx context.Context, identity T) (err error)
-}
-
-// IssueOptions stores optional values used while issuing credentials.
-type IssueOptions map[string]any
-
-// IssueOption mutates a set of issue options.
-type IssueOption func(IssueOptions)
-
-// WithClaims attaches an arbitrary claim-like value to the issue options.
-func WithClaims(key string, value any) IssueOption {
-	return func(o IssueOptions) {
-		o[key] = value
-	}
 }
