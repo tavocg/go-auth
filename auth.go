@@ -1,4 +1,4 @@
-// Package auth defines small authentication interfaces and token helpers.
+// Package auth defines small authentication interfaces and credential types.
 package auth
 
 import "context"
