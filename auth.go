@@ -3,13 +3,12 @@ package auth
 
 import (
 	"context"
-	"time"
 )
 
 // Token contains a token value and its expiration time.
 type Token struct {
 	Value     string
-	ExpiresAt time.Time
+	ExpiresAt int64
 }
 
 // Tokens contains the access and refresh tokens returned by an Authenticator.

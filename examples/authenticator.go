@@ -84,19 +84,19 @@ func (a *Authenticator) Issue(ctx context.Context, identity *Claims) (*auth.Toke
 		return nil, err
 	}
 
-	refreshExpiresAt := time.Time{}
+	var refreshExpiresAt int64
 	if a.refreshTTL > 0 {
-		refreshExpiresAt = time.Now().UTC().Add(a.refreshTTL)
+		refreshExpiresAt = time.Now().UTC().Add(a.refreshTTL).Unix()
 	}
 
-	accessExpiresAt := time.Time{}
+	var accessExpiresAt int64
 	if claims.ExpiresAt() != 0 {
-		accessExpiresAt = time.Unix(claims.ExpiresAt(), 0).UTC()
+		accessExpiresAt = claims.ExpiresAt()
 	}
 
 	a.store.Store(hashSecret(refreshValue), refreshRecord{
 		Subject:   identity.Subject(),
-		ExpiresAt: refreshExpiresAt.Unix(),
+		ExpiresAt: refreshExpiresAt,
 	})
 
 	return &auth.Tokens{
