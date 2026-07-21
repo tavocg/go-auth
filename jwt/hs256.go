@@ -11,12 +11,11 @@ import (
 const algHS256 = "HS256"
 
 // NewHS256Tokener creates a Tokener configured for HS256.
-func NewHS256Tokener[C Claimer](secret string, ttl time.Duration) (*Tokener[C], error) {
-	return NewTokener(secret, ttl, SignHS256[C], VerifyHS256[C])
+func NewHS256Tokener[C Claims](secret string, ttl time.Duration) (*Tokener[C], error) {
+	return newTokener(secret, ttl, signHS256[C], verifyHS256[C])
 }
 
-// SignHS256 signs claims as an HS256 JWT.
-func SignHS256[C Claimer](claims C, secret []byte) (string, error) {
+func signHS256[C Claims](claims C, secret []byte) (string, error) {
 	return signToken(claims, algHS256, secret, func(signingInput, secret []byte) ([]byte, error) {
 		mac := hmac.New(sha256.New, secret)
 		mac.Write(signingInput)
@@ -24,8 +23,7 @@ func SignHS256[C Claimer](claims C, secret []byte) (string, error) {
 	})
 }
 
-// VerifyHS256 verifies an HS256 JWT.
-func VerifyHS256[C Claimer](token string, secret []byte) (C, error) {
+func verifyHS256[C Claims](token string, secret []byte) (C, error) {
 	if len(secret) == 0 {
 		var zero C
 		return zero, ErrInvalidSecret

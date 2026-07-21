@@ -15,14 +15,6 @@ func (e errStr) Error() string {
 	return string(e)
 }
 
-var (
-	ErrInvalidSecret     error = errStr("invalid secret")
-	ErrInvalidSignFunc   error = errStr("invalid sign func")
-	ErrInvalidVerifyFunc error = errStr("invalid verify func")
-	ErrInvalidToken      error = errStr("invalid token")
-	ErrExpiredToken      error = errStr("expired token")
-)
-
 type signer func(signingInput, secret []byte) ([]byte, error)
 
 type header struct {
@@ -30,7 +22,7 @@ type header struct {
 	Type      string `json:"typ,omitempty"`
 }
 
-func signToken[C Claimer](claims C, alg string, secret []byte, sign signer) (string, error) {
+func signToken[C Claims](claims C, alg string, secret []byte, sign signer) (string, error) {
 	if len(secret) == 0 {
 		return "", ErrInvalidSecret
 	}
@@ -56,7 +48,7 @@ func signToken[C Claimer](claims C, alg string, secret []byte, sign signer) (str
 	return signingInput + "." + encode(signature), nil
 }
 
-func signingInput[C Claimer](header header, claims C) (string, error) {
+func signingInput[C Claims](header header, claims C) (string, error) {
 	headerJSON, err := json.Marshal(header)
 	if err != nil {
 		return "", err

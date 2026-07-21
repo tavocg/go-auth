@@ -3,34 +3,34 @@ package jwt
 
 import "time"
 
-// Expirer exposes expiration claim accessors.
-type Expirer interface {
+// Claims is implemented by concrete claims types used by token signers and
+// verifiers.
+type Claims interface {
 	ExpiresAt() int64
 	SetExpiresAt(int64)
 }
 
-// Claimer is implemented by concrete claims types used by token signers and
-// verifiers.
-type Claimer interface {
-	Expirer
-}
+var (
+	ErrInvalidSecret     error = errStr("invalid secret")
+	ErrInvalidSignFunc   error = errStr("invalid sign func")
+	ErrInvalidVerifyFunc error = errStr("invalid verify func")
+	ErrInvalidToken      error = errStr("invalid token")
+	ErrExpiredToken      error = errStr("expired token")
+)
 
-// SignFunc signs claims with the provided secret.
-type SignFunc[C Claimer] func(claims C, secret []byte) (string, error)
+type signFunc[C Claims] func(claims C, secret []byte) (string, error)
 
-// VerifyFunc verifies a token with the provided secret.
-type VerifyFunc[C Claimer] func(token string, secret []byte) (C, error)
+type verifyFunc[C Claims] func(token string, secret []byte) (C, error)
 
 // Tokener signs and verifies JWTs using a shared secret and TTL policy.
-type Tokener[C Claimer] struct {
+type Tokener[C Claims] struct {
 	secret []byte
 	ttl    time.Duration
-	sign   SignFunc[C]
-	verify VerifyFunc[C]
+	sign   signFunc[C]
+	verify verifyFunc[C]
 }
 
-// NewTokener creates a Tokener with the provided secret, TTL policy, and algorithms.
-func NewTokener[C Claimer](secret string, ttl time.Duration, sign SignFunc[C], verify VerifyFunc[C]) (*Tokener[C], error) {
+func newTokener[C Claims](secret string, ttl time.Duration, sign signFunc[C], verify verifyFunc[C]) (*Tokener[C], error) {
 	if secret == "" {
 		return nil, ErrInvalidSecret
 	}
