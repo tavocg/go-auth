@@ -5,6 +5,9 @@ import "time"
 
 // Claims is implemented by concrete claims types used by token signers and
 // verifiers.
+//
+// ExpiresAt returns a Unix timestamp in seconds. A zero value means the claims
+// have no configured expiration.
 type Claims interface {
 	ExpiresAt() int64
 	SetExpiresAt(int64)
@@ -50,6 +53,9 @@ func newTokener[C Claims](secret string, ttl time.Duration, sign signFunc[C], ve
 }
 
 // Sign signs a claim set.
+//
+// When the Tokener has a positive TTL, Sign mutates claims by calling
+// SetExpiresAt with the calculated Unix expiration timestamp before signing.
 func (t *Tokener[C]) Sign(claims C) (string, error) {
 	if t.ttl > 0 {
 		claims.SetExpiresAt(time.Now().UTC().Add(t.ttl).Unix())
@@ -59,6 +65,8 @@ func (t *Tokener[C]) Sign(claims C) (string, error) {
 }
 
 // Verify verifies a token and checks expiration when present.
+//
+// Claims with an ExpiresAt value of zero do not expire.
 func (t *Tokener[C]) Verify(token string) (C, error) {
 	claims, err := t.verify(token, t.secret)
 	if err != nil {
