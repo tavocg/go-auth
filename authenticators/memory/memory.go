@@ -18,6 +18,10 @@ type Claims interface {
 
 // Authenticator is an in-memory auth.Authenticator backed by JWT access tokens
 // and opaque refresh tokens.
+//
+// Refresh tokens are stored only in this process. They are lost when the
+// authenticator is discarded or the process exits, so this implementation is
+// best suited for tests, examples, and single-process applications.
 type Authenticator[T Claims] struct {
 	tokener    *jwt.Tokener[T]
 	refreshTTL time.Duration
@@ -86,7 +90,7 @@ func (a *Authenticator[T]) Issue(_ context.Context, identity T) (at, rt *auth.To
 // Refresh exchanges a refresh token for a new access/refresh token pair.
 func (a *Authenticator[T]) Refresh(ctx context.Context, refreshToken string) (at, rt *auth.Token, err error) {
 	key := hashSecret(refreshToken)
-	recordValue, ok := a.store.Load(key)
+	recordValue, ok := a.store.LoadAndDelete(key)
 	if !ok {
 		return nil, nil, auth.ErrInvalidToken
 	}
@@ -96,11 +100,9 @@ func (a *Authenticator[T]) Refresh(ctx context.Context, refreshToken string) (at
 		return nil, nil, auth.ErrInvalidToken
 	}
 	if record.ExpiresAt != 0 && time.Now().UTC().Unix() >= record.ExpiresAt {
-		a.store.Delete(key)
 		return nil, nil, auth.ErrExpiredToken
 	}
 
-	a.store.Delete(key)
 	return a.Issue(ctx, record.Identity)
 }
 
