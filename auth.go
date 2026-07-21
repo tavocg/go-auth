@@ -6,6 +6,9 @@ import (
 )
 
 // Token contains a token value and its expiration time.
+//
+// ExpiresAt is a Unix timestamp in seconds. A zero value means the token has
+// no configured expiration.
 type Token struct {
 	Value     string
 	ExpiresAt int64

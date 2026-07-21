@@ -11,6 +11,11 @@ Small Go authentication interfaces and JWT-backed authenticator helpers.
 
 ## Memory Authenticator
 
+The memory authenticator keeps refresh tokens in process memory only. Refresh
+tokens are lost when the authenticator is discarded or the process exits, so use
+it for tests, examples, and single-process applications rather than durable
+multi-instance deployments.
+
 ```go
 type Claims struct {
 	Expires int64  `json:"expires_at,omitempty"`
@@ -48,6 +53,15 @@ _ = claims
 _ = at
 _ = a.Revoke(ctx, rt.Value)
 ```
+
+## Expiration Behavior
+
+`Token.ExpiresAt` and `Claims.ExpiresAt` use Unix timestamps in seconds. A zero
+expiration means no expiration is configured.
+
+`jwt.Tokener.Sign` mutates the provided claims when the tokener has a positive
+TTL: it calls `SetExpiresAt` with the calculated Unix expiration timestamp
+before signing.
 
 ## Examples
 
