@@ -39,8 +39,9 @@ func (c *Claims) Subject() string {
 
 func main() {
 	ctx := context.Background()
+	secret := "example-secret"
 
-	memoryAuth, err := memory.NewAuthenticator[*Claims]("example-secret", 15*time.Minute, 24*time.Hour)
+	memoryAuth, err := memory.NewAuthenticator[*Claims](secret, 15*time.Minute, 24*time.Hour)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -52,6 +53,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	fmt.Printf("secret=%s\n", secret)
 	fmt.Printf("access_token=%s\n", at.Value)
 	fmt.Printf("refresh_token=%s\n", rt.Value)
 
