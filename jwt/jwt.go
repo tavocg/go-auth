@@ -37,9 +37,6 @@ type Tokener[C Claims] struct {
 }
 
 func newTokener[C Claims](secret string, ttl time.Duration, sign signFunc[C], verify verifyFunc[C]) (*Tokener[C], error) {
-	if secret == "" {
-		return nil, ErrInvalidSecret
-	}
 	if sign == nil {
 		return nil, ErrInvalidSignFunc
 	}

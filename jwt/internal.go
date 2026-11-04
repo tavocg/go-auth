@@ -23,9 +23,6 @@ type header struct {
 }
 
 func signToken[C Claims](claims C, alg string, secret []byte, sign signer) (string, error) {
-	if len(secret) == 0 {
-		return "", ErrInvalidSecret
-	}
 	if sign == nil {
 		return "", ErrInvalidToken
 	}

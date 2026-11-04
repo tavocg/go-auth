@@ -11,6 +11,8 @@ import (
 const algHS256 = "HS256"
 
 // NewHS256Tokener creates a Tokener configured for HS256.
+// Secret length is not enforced, including an empty secret. Callers should
+// warn when it is shorter than the recommended 32 random bytes.
 func NewHS256Tokener[C Claims](secret string, ttl time.Duration) (*Tokener[C], error) {
 	return newTokener(secret, ttl, signHS256[C], verifyHS256[C])
 }
@@ -24,11 +26,6 @@ func signHS256[C Claims](claims C, secret []byte) (string, error) {
 }
 
 func verifyHS256[C Claims](token string, secret []byte) (C, error) {
-	if len(secret) == 0 {
-		var zero C
-		return zero, ErrInvalidSecret
-	}
-
 	parts := strings.Split(token, ".")
 	if len(parts) != 3 {
 		var zero C

@@ -70,3 +70,10 @@ Run the complete example:
 ```sh
 go run ./examples
 ```
+
+## Signing secret policy
+
+HS256 accepts secrets of any length, including an empty string. Applications
+should warn when the secret is shorter than the recommended 32 random bytes.
+An empty or guessable secret allows others to forge tokens. The library still
+checks token signatures and expiration; it does not generate a replacement key.
