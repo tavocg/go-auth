@@ -1,7 +1,10 @@
 // Package jwt provides minimal JWT signing and verification helpers.
 package jwt
 
-import "time"
+import (
+	"reflect"
+	"time"
+)
 
 // Claims is implemented by concrete claims types used by token signers and
 // verifiers.
@@ -57,6 +60,9 @@ func newTokener[C Claims](secret string, ttl time.Duration, sign signFunc[C], ve
 // When the Tokener has a positive TTL, Sign mutates claims by calling
 // SetExpiresAt with the calculated Unix expiration timestamp before signing.
 func (t *Tokener[C]) Sign(claims C) (string, error) {
+	if nilClaims(claims) {
+		return "", ErrInvalidToken
+	}
 	if t.ttl > 0 {
 		claims.SetExpiresAt(time.Now().UTC().Add(t.ttl).Unix())
 	}
@@ -74,10 +80,29 @@ func (t *Tokener[C]) Verify(token string) (C, error) {
 		return zero, err
 	}
 
+	if nilClaims(claims) {
+		var zero C
+		return zero, ErrInvalidToken
+	}
+
 	if claims.ExpiresAt() != 0 && time.Now().UTC().Unix() >= claims.ExpiresAt() {
 		var zero C
 		return zero, ErrExpiredToken
 	}
 
 	return claims, nil
+}
+
+// Claims may be an interface or a named nil-capable type, not only a pointer.
+func nilClaims[C Claims](claims C) bool {
+	v := reflect.ValueOf(claims)
+	if !v.IsValid() {
+		return true
+	}
+	switch v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
