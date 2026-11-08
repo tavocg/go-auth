@@ -6,11 +6,26 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"reflect"
+	"time"
 )
 
 type refreshRecord[T Claims] struct {
 	Identity  T
 	ExpiresAt int64
+}
+
+// pruneExpired requires mu to be held. Issuance amortizes the scan to at most
+// once per minute; an idle authenticator needs no background worker.
+func (a *Authenticator[T]) pruneExpired(now time.Time) {
+	if a.refreshTTL <= 0 || now.Before(a.nextCleanup) {
+		return
+	}
+	a.nextCleanup = now.Add(time.Minute)
+	for key, record := range a.store {
+		if record.ExpiresAt != 0 && record.ExpiresAt <= now.Unix() {
+			delete(a.store, key)
+		}
+	}
 }
 
 func cloneClaims[T Claims](claims T) (T, error) {

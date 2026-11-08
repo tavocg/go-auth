@@ -21,6 +21,13 @@ authenticator. `RevokeAll` removes replacements from overlapping refreshes;
 an `Issue` ordered after revocation can create a new session. Revocation does
 not invalidate access tokens, which remain valid until expiration.
 
+When refresh tokens have an expiration, issuing or rotating a token pair also
+removes expired refresh records, with at most one scan per minute. Cleanup is
+lazy: an idle authenticator retains records until the next issuance. Valid
+records and tokens configured without expiration are preserved. A token
+already removed by cleanup returns `auth.ErrInvalidToken` on refresh; an expired
+record still present returns `auth.ErrExpiredToken` and is deleted immediately.
+
 ```go
 type Claims struct {
 	Expires int64  `json:"expires_at,omitempty"`

@@ -23,10 +23,11 @@ type Claims interface {
 // authenticator is discarded or the process exits, so this implementation is
 // best suited for tests, examples, and single-process applications.
 type Authenticator[T Claims] struct {
-	tokener    *jwt.Tokener[T]
-	refreshTTL time.Duration
-	mu         sync.Mutex
-	store      map[string]refreshRecord[T]
+	tokener     *jwt.Tokener[T]
+	refreshTTL  time.Duration
+	mu          sync.Mutex
+	store       map[string]refreshRecord[T]
+	nextCleanup time.Time
 }
 
 // NewAuthenticator creates an in-memory authenticator using HS256 JWTs for
@@ -56,6 +57,7 @@ func (a *Authenticator[T]) issue(identity T) (at, rt *auth.Token, err error) {
 	if isNil(identity) || identity.Subject() == "" {
 		return nil, nil, auth.ErrInvalidIdentity
 	}
+	a.pruneExpired(time.Now())
 
 	claims, err := cloneClaims(identity)
 	if err != nil {
