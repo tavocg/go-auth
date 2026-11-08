@@ -16,6 +16,11 @@ tokens are lost when the authenticator is discarded or the process exits, so use
 it for tests, examples, and single-process applications rather than durable
 multi-instance deployments.
 
+Refresh-token issuance, rotation, and revocation are serialized within an
+authenticator. `RevokeAll` removes replacements from overlapping refreshes;
+an `Issue` ordered after revocation can create a new session. Revocation does
+not invalidate access tokens, which remain valid until expiration.
+
 ```go
 type Claims struct {
 	Expires int64  `json:"expires_at,omitempty"`

@@ -16,6 +16,8 @@
 //
 // Refresh hashes the provided refresh token, loads the row, rejects missing or
 // expired rows, deletes the old row, then issues a new token pair.
+// Consumption and replacement must be atomic relative to RevokeAll, so an
+// in-flight refresh cannot recreate a session after revocation completes.
 //
 // Verify validates only the access token. Revoke deletes one refresh-token row.
 // RevokeAll deletes every row for the identity subject.

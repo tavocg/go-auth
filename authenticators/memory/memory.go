@@ -25,7 +25,8 @@ type Claims interface {
 type Authenticator[T Claims] struct {
 	tokener    *jwt.Tokener[T]
 	refreshTTL time.Duration
-	store      sync.Map
+	mu         sync.Mutex
+	store      map[string]refreshRecord[T]
 }
 
 // NewAuthenticator creates an in-memory authenticator using HS256 JWTs for
@@ -39,11 +40,19 @@ func NewAuthenticator[T Claims](secret string, accessTTL, refreshTTL time.Durati
 	return &Authenticator[T]{
 		tokener:    tokener,
 		refreshTTL: refreshTTL,
+		store:      make(map[string]refreshRecord[T]),
 	}, nil
 }
 
 // Issue creates a new access/refresh token pair for the provided identity.
 func (a *Authenticator[T]) Issue(_ context.Context, identity T) (at, rt *auth.Token, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.issue(identity)
+}
+
+// issue requires mu to be held through refresh-token storage.
+func (a *Authenticator[T]) issue(identity T) (at, rt *auth.Token, err error) {
 	if isNil(identity) || identity.Subject() == "" {
 		return nil, nil, auth.ErrInvalidIdentity
 	}
@@ -73,10 +82,10 @@ func (a *Authenticator[T]) Issue(_ context.Context, identity T) (at, rt *auth.To
 		return nil, nil, err
 	}
 
-	a.store.Store(hashSecret(refreshToken), refreshRecord[T]{
+	a.store[hashSecret(refreshToken)] = refreshRecord[T]{
 		Identity:  storedIdentity,
 		ExpiresAt: refreshExpiresAt,
-	})
+	}
 
 	return &auth.Token{
 			Value:     accessToken,
@@ -88,22 +97,21 @@ func (a *Authenticator[T]) Issue(_ context.Context, identity T) (at, rt *auth.To
 }
 
 // Refresh exchanges a refresh token for a new access/refresh token pair.
-func (a *Authenticator[T]) Refresh(ctx context.Context, refreshToken string) (at, rt *auth.Token, err error) {
-	key := hashSecret(refreshToken)
-	recordValue, ok := a.store.LoadAndDelete(key)
-	if !ok {
-		return nil, nil, auth.ErrInvalidToken
-	}
+func (a *Authenticator[T]) Refresh(_ context.Context, refreshToken string) (at, rt *auth.Token, err error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 
-	record, ok := recordValue.(refreshRecord[T])
+	key := hashSecret(refreshToken)
+	record, ok := a.store[key]
 	if !ok {
 		return nil, nil, auth.ErrInvalidToken
 	}
+	delete(a.store, key)
 	if record.ExpiresAt != 0 && time.Now().UTC().Unix() >= record.ExpiresAt {
 		return nil, nil, auth.ErrExpiredToken
 	}
 
-	return a.Issue(ctx, record.Identity)
+	return a.issue(record.Identity)
 }
 
 // Verify validates an access token and returns its claims.
@@ -132,24 +140,28 @@ func (a *Authenticator[T]) Verify(_ context.Context, accessToken string) (T, err
 
 // Revoke invalidates a single refresh token.
 func (a *Authenticator[T]) Revoke(_ context.Context, refreshToken string) error {
-	key := hashSecret(refreshToken)
-	a.store.Delete(key)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.store, hashSecret(refreshToken))
 	return nil
 }
 
 // RevokeAll invalidates every refresh token associated with an identity.
+// A concurrent Refresh cannot store a replacement after this method returns.
+// A new Issue ordered after revocation creates a valid session. Existing
+// access tokens remain valid until expiration.
 func (a *Authenticator[T]) RevokeAll(_ context.Context, identity T) error {
 	if isNil(identity) || identity.Subject() == "" {
 		return auth.ErrInvalidIdentity
 	}
 
-	a.store.Range(func(key, value any) bool {
-		record, ok := value.(refreshRecord[T])
-		if ok && record.Identity.Subject() == identity.Subject() {
-			a.store.Delete(key)
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	for key, record := range a.store {
+		if record.Identity.Subject() == identity.Subject() {
+			delete(a.store, key)
 		}
-		return true
-	})
+	}
 
 	return nil
 }
