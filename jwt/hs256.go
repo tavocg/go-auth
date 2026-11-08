@@ -54,6 +54,12 @@ func verifyHS256[C Claims](token string, secret []byte) (C, error) {
 		var zero C
 		return zero, ErrInvalidToken
 	}
+	// Critical extensions and unencoded JWT payloads are not supported.
+	if len(parsedHeader.Critical) != 0 ||
+		(len(parsedHeader.Base64) != 0 && string(parsedHeader.Base64) != "true") {
+		var zero C
+		return zero, ErrInvalidToken
+	}
 
 	payloadBytes, err := decode(payload)
 	if err != nil {

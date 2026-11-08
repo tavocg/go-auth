@@ -18,8 +18,10 @@ func (e errStr) Error() string {
 type signer func(signingInput, secret []byte) ([]byte, error)
 
 type header struct {
-	Algorithm string `json:"alg"`
-	Type      string `json:"typ,omitempty"`
+	Algorithm string          `json:"alg"`
+	Type      string          `json:"typ,omitempty"`
+	Critical  json.RawMessage `json:"crit,omitempty"`
+	Base64    json.RawMessage `json:"b64,omitempty"`
 }
 
 func signToken[C Claims](claims C, alg string, secret []byte, sign signer) (string, error) {

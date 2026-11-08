@@ -68,6 +68,14 @@ expiration means no expiration is configured.
 TTL: it calls `SetExpiresAt` with the calculated Unix expiration timestamp
 before signing.
 
+## JWT header policy
+
+HS256 verification does not support critical extensions: a header containing
+`crit` is rejected with `jwt.ErrInvalidToken`, including malformed, empty, or
+null values. JWT payloads must remain base64url encoded; an explicit `b64` is
+accepted only when it is `true`. Ordinary tokens and optional noncritical
+headers remain supported.
+
 ## Examples
 
 Run the complete example:
