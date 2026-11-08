@@ -21,6 +21,7 @@ var (
 	ErrInvalidSignFunc   error = errStr("invalid sign func")
 	ErrInvalidVerifyFunc error = errStr("invalid verify func")
 	ErrInvalidToken      error = errStr("invalid token")
+	ErrInvalidTTL        error = errStr("invalid token TTL")
 	ErrExpiredToken      error = errStr("expired token")
 )
 
@@ -37,6 +38,9 @@ type Tokener[C Claims] struct {
 }
 
 func newTokener[C Claims](secret string, ttl time.Duration, sign signFunc[C], verify verifyFunc[C]) (*Tokener[C], error) {
+	if ttl < 0 {
+		return nil, ErrInvalidTTL
+	}
 	if sign == nil {
 		return nil, ErrInvalidSignFunc
 	}

@@ -32,7 +32,12 @@ type Authenticator[T Claims] struct {
 
 // NewAuthenticator creates an in-memory authenticator using HS256 JWTs for
 // access tokens.
+// Negative TTLs return jwt.ErrInvalidTTL. A zero access TTL preserves claims'
+// expiration; a zero refresh TTL creates refresh tokens without expiration.
 func NewAuthenticator[T Claims](secret string, accessTTL, refreshTTL time.Duration) (*Authenticator[T], error) {
+	if refreshTTL < 0 {
+		return nil, jwt.ErrInvalidTTL
+	}
 	tokener, err := jwt.NewHS256Tokener[T](secret, accessTTL)
 	if err != nil {
 		return nil, err

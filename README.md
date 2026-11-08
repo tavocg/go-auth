@@ -71,6 +71,11 @@ _ = a.Revoke(ctx, rt.Value)
 `Token.ExpiresAt` and `Claims.ExpiresAt` use Unix timestamps in seconds. A zero
 expiration means no expiration is configured.
 
+Constructors reject negative access or refresh TTLs with `jwt.ErrInvalidTTL`.
+A zero JWT TTL leaves the provided claims' expiration unchanged; a zero refresh
+TTL creates refresh tokens without expiration. Use positive TTLs for automatic
+expiration.
+
 `jwt.Tokener.Sign` mutates the provided claims when the tokener has a positive
 TTL: it calls `SetExpiresAt` with the calculated Unix expiration timestamp
 before signing.

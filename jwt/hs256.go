@@ -13,6 +13,7 @@ const algHS256 = "HS256"
 // NewHS256Tokener creates a Tokener configured for HS256.
 // Secret length is not enforced, including an empty secret. Callers should
 // warn when it is shorter than the recommended 32 random bytes.
+// A negative TTL returns ErrInvalidTTL. A zero TTL preserves claims' expiration.
 func NewHS256Tokener[C Claims](secret string, ttl time.Duration) (*Tokener[C], error) {
 	return newTokener(secret, ttl, signHS256[C], verifyHS256[C])
 }
